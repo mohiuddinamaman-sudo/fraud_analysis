@@ -10,33 +10,35 @@ LEFT JOIN users u
 WHERE t.SOURCE = 'GAIA';
 
 
--- A.2: First Successful Card Payment Over $10 USD
+-- A.2: Transaction Success Rate
 
-WITH first_card_payment AS (
+WITH first_transaction AS (
     SELECT
         t.USER_ID,
         t.CREATED_DATE,
         t.AMOUNT,
         t.CURRENCY,
+        t.TYPE,
+        t.STATE,
         ROW_NUMBER() OVER (
             PARTITION BY t.USER_ID
             ORDER BY t.CREATED_DATE
         ) AS rn
     FROM transactions t
-    WHERE t.TYPE = 'CARD_PAYMENT'
-      AND t.STATE = 'COMPLETED'
 ),
 
 converted AS (
     SELECT
         f.USER_ID,
+        f.TYPE,
+        f.STATE,
         CASE
             WHEN f.CURRENCY = 'EUR'
                 THEN f.AMOUNT / POWER(10, c.EXPONENT)
             ELSE
                 (f.AMOUNT / POWER(10, c.EXPONENT)) * fx.RATE
         END AS amount_eur
-    FROM first_card_payment f
+    FROM first_transaction f
     JOIN currency_details c
         ON f.CURRENCY = c.CURRENCY
     LEFT JOIN fx_rates fx
@@ -48,6 +50,8 @@ converted AS (
 converted_usd AS (
     SELECT
         USER_ID,
+        TYPE,
+        STATE,
         amount_eur / (
             SELECT RATE
             FROM fx_rates
@@ -62,7 +66,9 @@ SELECT
     (SELECT COUNT(*) FROM users) AS total_users,
     COUNT(*) * 100.0 / (SELECT COUNT(*) FROM users) AS percentage_users
 FROM converted_usd
-WHERE amount_usd > 10;
+WHERE TYPE = 'CARD_PAYMENT'
+  AND STATE = 'COMPLETED'
+  AND amount_usd > 10;
 
 
 -- Fraudster Analysis

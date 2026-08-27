@@ -50,3 +50,40 @@ FROM transactions t
 LEFT JOIN fraudsters f
     ON t.USER_ID = f.user_id
 WHERE f.user_id IS NULL;
+
+
+-- Step 2: Create transaction metrics for each user
+
+SELECT
+    t.USER_ID,
+    COUNT(*) AS total_transactions,
+    SUM(t.AMOUNT) AS total_amount,
+    AVG(t.AMOUNT) AS avg_amount,
+    SUM(CASE WHEN t.STATE = 'DECLINED' THEN 1 ELSE 0 END) AS declined_transactions
+FROM transactions t
+LEFT JOIN fraudsters f
+    ON t.USER_ID = f.user_id
+WHERE f.user_id IS NULL
+GROUP BY t.USER_ID;
+
+-- Step 3: Compare known fraudsters with other users
+
+SELECT
+    CASE
+        WHEN f.user_id IS NOT NULL THEN 'KNOWN FRAUDSTERS'
+        ELSE 'OTHER USERS'
+    END AS user_group,
+    COUNT(DISTINCT t.USER_ID) AS users,
+    AVG(t.AMOUNT) AS avg_transaction_amount,
+    MAX(t.AMOUNT) AS max_transaction_amount,
+    COUNT(*) AS total_transactions,
+    SUM(CASE WHEN t.STATE = 'DECLINED' THEN 1 ELSE 0 END) AS declined_transactions,
+    SUM(CASE WHEN t.STATE = 'REVERTED' THEN 1 ELSE 0 END) AS reverted_transactions
+FROM transactions t
+LEFT JOIN fraudsters f
+    ON t.USER_ID = f.user_id
+GROUP BY
+    CASE
+        WHEN f.user_id IS NOT NULL THEN 'KNOWN FRAUDSTERS'
+        ELSE 'OTHER USERS'
+    END;

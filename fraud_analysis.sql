@@ -40,3 +40,13 @@ JOIN fx_rates r
    AND r.CCY = 'USD'
 WHERE f.rn = 1
   AND (f.AMOUNT / POWER(10, c.EXPONENT)) * r.RATE > 10;
+
+-- Fraudster Analysis
+-- Step 1: Exclude users already in the known fraudsters list
+
+SELECT
+    t.*
+FROM transactions t
+LEFT JOIN fraudsters f
+    ON t.USER_ID = f.user_id
+WHERE f.user_id IS NULL;

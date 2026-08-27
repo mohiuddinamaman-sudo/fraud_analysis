@@ -10,7 +10,7 @@ LEFT JOIN users u
 WHERE t.SOURCE = 'GAIA';
 
 
--- A.2: First Successful Card Payment Over $10
+-- A.2: First Successful Card Payment Over $10 USD
 
 WITH first_card_payment AS (
     SELECT
@@ -27,12 +27,15 @@ WITH first_card_payment AS (
       AND t.STATE = 'COMPLETED'
 ),
 
-first_payment_amount AS (
+converted AS (
     SELECT
         f.USER_ID,
-        (f.AMOUNT / POWER(10, c.EXPONENT)) AS amount_actual,
-        f.CURRENCY,
-        fx.RATE AS eur_to_currency_rate
+        CASE
+            WHEN f.CURRENCY = 'EUR'
+                THEN f.AMOUNT / POWER(10, c.EXPONENT)
+            ELSE
+                (f.AMOUNT / POWER(10, c.EXPONENT)) * fx.RATE
+        END AS amount_eur
     FROM first_card_payment f
     JOIN currency_details c
         ON f.CURRENCY = c.CURRENCY
@@ -40,17 +43,6 @@ first_payment_amount AS (
         ON fx.BASE_CCY = 'EUR'
        AND fx.CCY = f.CURRENCY
     WHERE f.rn = 1
-),
-
-converted AS (
-    SELECT
-        USER_ID,
-        CASE
-            WHEN CURRENCY = 'EUR'
-                THEN amount_actual
-            ELSE amount_actual / eur_to_currency_rate
-        END AS amount_eur
-    FROM first_payment_amount
 ),
 
 converted_usd AS (
@@ -74,7 +66,7 @@ WHERE amount_usd > 10;
 
 
 -- Fraudster Analysis
--- Step 1: Remove users already in the known fraudsters list
+-- Step 1: Exclude users already in the known fraudsters list
 
 SELECT
     t.*
@@ -84,7 +76,7 @@ LEFT JOIN fraudsters f
 WHERE f.USER_ID IS NULL;
 
 
--- Step 2: Create user-level transaction metrics
+-- Step 2: Create EUR transaction metrics for each user
 
 WITH transaction_eur AS (
     SELECT
@@ -94,7 +86,7 @@ WITH transaction_eur AS (
             WHEN t.CURRENCY = 'EUR'
                 THEN t.AMOUNT / POWER(10, c.EXPONENT)
             ELSE
-                (t.AMOUNT / POWER(10, c.EXPONENT)) / fx.RATE
+                (t.AMOUNT / POWER(10, c.EXPONENT)) * fx.RATE
         END AS amount_eur
     FROM transactions t
     LEFT JOIN fraudsters f
@@ -129,7 +121,7 @@ WITH transaction_eur AS (
             WHEN t.CURRENCY = 'EUR'
                 THEN t.AMOUNT / POWER(10, c.EXPONENT)
             ELSE
-                (t.AMOUNT / POWER(10, c.EXPONENT)) / fx.RATE
+                (t.AMOUNT / POWER(10, c.EXPONENT)) * fx.RATE
         END AS amount_eur
     FROM transactions t
     JOIN currency_details c
@@ -161,7 +153,7 @@ GROUP BY
     END;
 
 
--- Step 4 & 5: Calculate fraud indicators and rank users
+-- Steps 4 & 5: Calculate fraud indicators and identify top 5 users
 
 WITH transaction_eur AS (
     SELECT
@@ -171,7 +163,7 @@ WITH transaction_eur AS (
             WHEN t.CURRENCY = 'EUR'
                 THEN t.AMOUNT / POWER(10, c.EXPONENT)
             ELSE
-                (t.AMOUNT / POWER(10, c.EXPONENT)) / fx.RATE
+                (t.AMOUNT / POWER(10, c.EXPONENT)) * fx.RATE
         END AS amount_eur
     FROM transactions t
     LEFT JOIN fraudsters f

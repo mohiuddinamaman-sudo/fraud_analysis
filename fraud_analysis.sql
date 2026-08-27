@@ -89,73 +89,56 @@ GROUP BY
     END;
 
 
--- Step 4: Create a simple fraud score
+-- Steps 4 & 5: Convert transaction amounts to EUR,
+-- calculate fraud indicators and identify the top 5 users
 
-WITH user_metrics AS (
+WITH transaction_eur AS (
     SELECT
         t.USER_ID,
-        AVG(t.AMOUNT) AS avg_amount,
-        MAX(t.AMOUNT) AS max_amount,
-        SUM(t.AMOUNT) AS total_amount,
-        COUNT(*) AS transactions,
-        SUM(CASE WHEN t.STATE = 'DECLINED' THEN 1 ELSE 0 END) AS declined,
-        SUM(CASE WHEN t.STATE = 'REVERTED' THEN 1 ELSE 0 END) AS reverted
+        t.STATE,
+        CASE
+            WHEN t.CURRENCY = 'EUR'
+                THEN t.AMOUNT / POWER(10, c.exponent)
+            ELSE
+                (t.AMOUNT / POWER(10, c.exponent)) * r.rate
+        END AS amount_eur
     FROM transactions t
     LEFT JOIN fraudsters f
         ON t.USER_ID = f.user_id
+    LEFT JOIN currencies c
+        ON t.CURRENCY = c.currency
+    LEFT JOIN rates r
+        ON r.base_ccy = 'EUR'
+        AND r.ccy = t.CURRENCY
     WHERE f.user_id IS NULL
-    GROUP BY t.USER_ID
-)
+),
 
-SELECT
-    USER_ID,
-    avg_amount,
-    max_amount,
-    total_amount,
-    transactions,
-    declined,
-    reverted,
-    (
-        CASE WHEN avg_amount > 1000 THEN 1 ELSE 0 END +
-        CASE WHEN max_amount > 5000 THEN 1 ELSE 0 END +
-        CASE WHEN total_amount > 100000 THEN 1 ELSE 0 END +
-        CASE WHEN declined >= 10 THEN 1 ELSE 0 END +
-        CASE WHEN reverted >= 10 THEN 1 ELSE 0 END
-    ) AS fraud_score
-FROM user_metrics
-ORDER BY fraud_score DESC, total_amount DESC;
-
--- Step 5: Identify the top 5 potential fraudsters
-
-WITH user_metrics AS (
+user_metrics AS (
     SELECT
-        t.USER_ID,
-        AVG(t.AMOUNT) AS avg_amount,
-        MAX(t.AMOUNT) AS max_amount,
-        SUM(t.AMOUNT) AS total_amount,
+        USER_ID,
+        AVG(amount_eur) AS avg_amount_eur,
+        MAX(amount_eur) AS max_amount_eur,
+        SUM(amount_eur) AS total_amount_eur,
         COUNT(*) AS transactions,
-        SUM(CASE WHEN t.STATE = 'DECLINED' THEN 1 ELSE 0 END) AS declined,
-        SUM(CASE WHEN t.STATE = 'REVERTED' THEN 1 ELSE 0 END) AS reverted
-    FROM transactions t
-    LEFT JOIN fraudsters f
-        ON t.USER_ID = f.user_id
-    WHERE f.user_id IS NULL
-    GROUP BY t.USER_ID
+        SUM(CASE WHEN STATE = 'DECLINED' THEN 1 ELSE 0 END) AS declined,
+        SUM(CASE WHEN STATE = 'REVERTED' THEN 1 ELSE 0 END) AS reverted
+    FROM transaction_eur
+    GROUP BY USER_ID
 ),
 
 scored_users AS (
     SELECT
         USER_ID,
-        avg_amount,
-        max_amount,
-        total_amount,
+        avg_amount_eur,
+        max_amount_eur,
+        total_amount_eur,
         transactions,
         declined,
         reverted,
         (
-            CASE WHEN avg_amount > 1000 THEN 1 ELSE 0 END +
-            CASE WHEN max_amount > 5000 THEN 1 ELSE 0 END +
-            CASE WHEN total_amount > 100000 THEN 1 ELSE 0 END +
+            CASE WHEN avg_amount_eur > 1000 THEN 1 ELSE 0 END +
+            CASE WHEN max_amount_eur > 5000 THEN 1 ELSE 0 END +
+            CASE WHEN total_amount_eur > 100000 THEN 1 ELSE 0 END +
             CASE WHEN declined >= 10 THEN 1 ELSE 0 END +
             CASE WHEN reverted >= 10 THEN 1 ELSE 0 END
         ) AS fraud_score
@@ -164,5 +147,5 @@ scored_users AS (
 
 SELECT *
 FROM scored_users
-ORDER BY fraud_score DESC, total_amount DESC
+ORDER BY fraud_score DESC, total_amount_eur DESC
 LIMIT 5;

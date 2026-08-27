@@ -87,3 +87,40 @@ GROUP BY
         WHEN f.user_id IS NOT NULL THEN 'KNOWN FRAUDSTERS'
         ELSE 'OTHER USERS'
     END;
+
+
+-- Step 4: Create a simple fraud score
+
+WITH user_metrics AS (
+    SELECT
+        t.USER_ID,
+        AVG(t.AMOUNT) AS avg_amount,
+        MAX(t.AMOUNT) AS max_amount,
+        SUM(t.AMOUNT) AS total_amount,
+        COUNT(*) AS transactions,
+        SUM(CASE WHEN t.STATE = 'DECLINED' THEN 1 ELSE 0 END) AS declined,
+        SUM(CASE WHEN t.STATE = 'REVERTED' THEN 1 ELSE 0 END) AS reverted
+    FROM transactions t
+    LEFT JOIN fraudsters f
+        ON t.USER_ID = f.user_id
+    WHERE f.user_id IS NULL
+    GROUP BY t.USER_ID
+)
+
+SELECT
+    USER_ID,
+    avg_amount,
+    max_amount,
+    total_amount,
+    transactions,
+    declined,
+    reverted,
+    (
+        CASE WHEN avg_amount > 1000 THEN 1 ELSE 0 END +
+        CASE WHEN max_amount > 5000 THEN 1 ELSE 0 END +
+        CASE WHEN total_amount > 100000 THEN 1 ELSE 0 END +
+        CASE WHEN declined >= 10 THEN 1 ELSE 0 END +
+        CASE WHEN reverted >= 10 THEN 1 ELSE 0 END
+    ) AS fraud_score
+FROM user_metrics
+ORDER BY fraud_score DESC, total_amount DESC;

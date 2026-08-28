@@ -36,7 +36,7 @@ converted AS (
             WHEN f.CURRENCY = 'EUR'
                 THEN f.AMOUNT / POWER(10, c.EXPONENT)
             ELSE
-                (f.AMOUNT / POWER(10, c.EXPONENT)) * fx.RATE
+                (f.AMOUNT / POWER(10, c.EXPONENT)) / fx.RATE
         END AS amount_eur
     FROM first_transaction f
     JOIN currency_details c
@@ -92,7 +92,7 @@ WITH transaction_eur AS (
             WHEN t.CURRENCY = 'EUR'
                 THEN t.AMOUNT / POWER(10, c.EXPONENT)
             ELSE
-                (t.AMOUNT / POWER(10, c.EXPONENT)) * fx.RATE
+                (t.AMOUNT / POWER(10, c.EXPONENT)) / fx.RATE
         END AS amount_eur
     FROM transactions t
     LEFT JOIN fraudsters f
@@ -127,7 +127,7 @@ WITH transaction_eur AS (
             WHEN t.CURRENCY = 'EUR'
                 THEN t.AMOUNT / POWER(10, c.EXPONENT)
             ELSE
-                (t.AMOUNT / POWER(10, c.EXPONENT)) * fx.RATE
+                (t.AMOUNT / POWER(10, c.EXPONENT)) / fx.RATE
         END AS amount_eur
     FROM transactions t
     JOIN currency_details c
@@ -169,7 +169,7 @@ WITH transaction_eur AS (
             WHEN t.CURRENCY = 'EUR'
                 THEN t.AMOUNT / POWER(10, c.EXPONENT)
             ELSE
-                (t.AMOUNT / POWER(10, c.EXPONENT)) * fx.RATE
+                (t.AMOUNT / POWER(10, c.EXPONENT)) / fx.RATE
         END AS amount_eur
     FROM transactions t
     LEFT JOIN fraudsters f
